@@ -2,8 +2,13 @@ import sqlite3
 import webbrowser
 import requests
 import os
+from apify_client import ApifyClient
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DB_NAME = "videos.db"
+APIFY_TOKEN = os.getenv("APIFY_TOKEN", os.getenv("APIFY_API_TOKEN", "APIFY_API_TOKEN"))
 
 # =====================================================================
 # DATABASE OPERATIONS
@@ -67,6 +72,71 @@ def get_youtube_title(url):
 
 def clear_screen():
 	os.system('cls' if os.name == 'nt' else 'clear')
+
+def download_video_apify(url):
+	if not APIFY_TOKEN or APIFY_TOKEN == "APIFY_API_TOKEN":
+		print("First set the Apify API Token in your .env file.")
+		return
+	
+	print("Connecting to Apify Cloud Platform....")
+	apify_client = ApifyClient(APIFY_TOKEN)
+	run_input = {
+		"videos": [{
+			"url": url
+		}]
+	}
+
+	try:
+		print("Running the downloader actor in Apify Cloud Platform....")
+		# Increased memory to 1024MB to prevent the download from getting cut off mid-way.
+		run = apify_client.actor("streamers/youtube-video-downloader").call(run_input=run_input, memory_mbytes=1024)
+		 
+		print("Fetching download data from the dataset...")
+		
+		# Safely extract the dataset ID. 
+		# Handles both dicts (modern client) and objects (older versions/SDK).
+		dataset_id = run.get("defaultDatasetId") if isinstance(run, dict) else \
+                     getattr(run, "default_dataset_id", getattr(run, "defaultDatasetId", None))
+
+		link_found = False
+		dataset_items = list(apify_client.dataset(dataset_id).iterate_items())
+
+		for item in dataset_items:
+			# Try multiple common fields for the download URL
+			download_url = (
+				item.get("downloadUrl") or 
+				item.get("downloadedFileUrl") or 
+				item.get("videoUrl") or 
+				item.get("videoOnlyUrl") or 
+				item.get("fileUrl")
+			)
+			
+			# Fallback: check if 'url' is present and is NOT the original YouTube link
+			if not download_url:
+				candidate_url = item.get("url")
+				if candidate_url and "youtube.com" not in candidate_url and "youtu.be" not in candidate_url:
+					download_url = candidate_url
+
+			if download_url:
+				print(f"\n🎉 Success! Download link generated.")
+				print(f"🔗 Link: {download_url}")
+				link_found = True
+
+				print("🍿 Launching your browser to fetch the file...")
+				webbrowser.open(download_url)
+				break
+
+		if not link_found:
+			print("\n❌ Error: Could not extract a direct download URL from the response.")
+			if not dataset_items:
+				print("⚠️ The result dataset is empty. This usually means the actor failed to process the video.")
+			else:
+				print(f"DEBUG: Found {len(dataset_items)} items, but none contained a valid download link.")
+				print(f"Available keys in first result: {list(dataset_items[0].keys())}")
+			print(f"💾 Check your run console for details: https://console.apify.com/storage/datasets/{dataset_id}")
+
+	except Exception as e:
+		print(f"\n⚠️ Something went wrong during API call. Error:{e}")
 
 def display_video_list(videos):
 	if not videos:
@@ -195,6 +265,40 @@ def delete_video():
 	else:
 		print("Video not deleted.")
 
+def download_video():
+	clear_screen()
+	print("--- 📥 Download Video ---")
+	videos = fetch_all_videos()
+	
+	while True:
+		print("Enter the option which you wanna go for:")
+		print("1. Download from the list of saved videos.")
+		print("2. Insert custom URL.")
+		print("3. Go back.")
+
+		choice = input("Enter your choice (1-3): ")
+		match choice:
+			case "1":
+				if not display_video_list(videos):
+					return
+				choice = get_valid_index(videos,"Enter the index no. to download (or n to go back):")
+				if choice != 'back':
+					download_video_apify(videos[choice][2])
+				else:
+					print("Returning to the main menu...")
+			case "2":
+				url = input("Enter the YouTube video URL: ").strip()
+				if url:
+					download_video_apify(url)
+				else:
+					print("Invalid URL.")
+			case "3":
+				return
+			case _:
+				print("Invalid choice. Please try again.")
+				continue
+	
+
 # =================================================
 # MAIN FUNCTION
 # =================================================
@@ -207,17 +311,19 @@ def main():
 		print("1. Watch / Open Video")
 		print("2. Add New Video")
 		print("3. Update Video Details")
-		print("4. Delete Video")
-		print("5. Exit Application")
+		print("4. Download Video")
+		print("5. Delete Video")
+		print("6. Exit Application")
 	
-		choice = input("Enter your choice (1-5): ")
+		choice = input("Enter your choice (1-6): ")
 
 		match choice:
 			case "1": watch_video()
 			case "2": add_video()
 			case "3": update_video()
-			case "4": delete_video()
-			case "5":
+			case "4": download_video()
+			case "5": delete_video()
+			case "6":
 				clear_screen()
 				print("\n Thanks for using Youtube Video Manager")
 				break 

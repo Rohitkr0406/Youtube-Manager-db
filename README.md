@@ -7,6 +7,7 @@ A simple and elegant Command Line Interface (CLI) application in Python to manag
 - **Add New Videos**: Add a YouTube URL and automatically fetch its title, or provide your own title.
 - **Watch Videos**: Open any saved video directly in your default web browser from the CLI.
 - **Update Details**: Easily update a video's title or URL if it changes.
+- **Download Videos**: Integration with the Apify Cloud Platform to generate direct download links for videos.
 - **Delete Videos**: Remove videos from your collection when you no longer need them.
 - **Persistent Storage**: All video data is safely stored locally in an SQLite database (`videos.db`).
 
@@ -26,10 +27,16 @@ A simple and elegant Command Line Interface (CLI) application in Python to manag
 2. **Install the required dependencies:**
    Install the `requests` library using `pip`:
    ```bash
-   pip install requests
+   pip install -r requirements.txt
    ```
 
-3. **Run the Application:**
+3. **Set up Environment Variables:**
+   Create a `.env` file in the root directory and add your Apify API Token:
+   ```text
+   APIFY_TOKEN=your_apify_api_token_here
+   ```
+
+4. **Run the Application:**
    Navigate to the `src` directory and run the script:
    ```bash
    cd src
@@ -46,8 +53,9 @@ What would you like to do?
 1. Watch / Open Video
 2. Add New Video
 3. Update Video Details
-4. Delete Video
-5. Exit Application
+4. Download Video
+5. Delete Video
+6. Exit Application
 ```
 
 Simply type the number corresponding to your choice and press **Enter**.
